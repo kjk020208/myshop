@@ -3,16 +3,14 @@ from flask import Flask, render_template, request, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from azure.storage.blob import BlobServiceClient
 import uuid
-import random
-import requests  # [중요] AI 서버와 통신하기 위해 반드시 필요함
+import requests  # 필수: AI 통신용
 
-# Azure Application Insights 모니터링 설정
+# Azure Application Insights 모니터링
 from azure.monitor.opentelemetry import configure_azure_monitor
 
 app = Flask(__name__)
 
-# [1] Application Insights 및 라이브 메트릭 활성화
-# 라이브 메트릭을 위해 enable_live_metrics=True 옵션을 사용합니다.
+# [1] Application Insights 설정
 configure_azure_monitor(
     connection_string="InstrumentationKey=ea5dbbca-e80c-4fc2-963d-828364c43586;IngestionEndpoint=https://koreacentral-0.in.applicationinsights.azure.com/;LiveEndpoint=https://koreacentral.livediagnostics.monitor.azure.com/;ApplicationId=e701c570-f5e0-4011-a427-ba6602564e1a",
     enable_live_metrics=True
@@ -34,7 +32,6 @@ CONTAINER_NAME = "product"
 blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
 
 
-# 데이터베이스 상품 모델
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.Unicode(200), nullable=False)
@@ -44,45 +41,36 @@ class Product(db.Model):
     image_url = db.Column(db.String(500), nullable=True)
 
 
-# [핵심 로직] 이미지를 분석하여 AI 설명을 생성하는 함수
+# [수정] 데이터 추출 로직을 강화한 AI 함수
 def generate_ai_description(image_url):
     if not image_url:
-        return u"매력적인 디자인의 신규 상품입니다."
-
+        return u"매력적인 신규 상품입니다."
     try:
-        # 안전한 API 주소 생성
-        base_url = VISION_ENDPOINT.strip()
-        if not base_url.endswith('/'):
-            base_url += '/'
-        analyze_url = base_url + "vision/v3.2/analyze"
-
-        # 이미지 분석 요청 파라미터 (한글 결과 포함)
-        params = {'visualFeatures': 'Description', 'language': 'ko'}
-        headers = {
-            'Ocp-Apim-Subscription-Key': VISION_KEY,
-            'Content-Type': 'application/json'
-        }
+        # API 주소 정밀 조립
+        analyze_url = VISION_ENDPOINT.rstrip('/') + "/vision/v3.2/analyze"
+        params = {'visualFeatures': 'Description,Tags', 'language': 'ko'}  # Tags 추가
+        headers = {'Ocp-Apim-Subscription-Key': VISION_KEY, 'Content-Type': 'application/json'}
         data = {'url': image_url}
 
-        # Azure AI 서버 호출
-        response = requests.post(analyze_url, headers=headers, params=params, json=data, timeout=10)
+        response = requests.post(analyze_url, headers=headers, params=params, json=data, timeout=15)
 
         if response.status_code != 200:
-            print(f"AI API Error: {response.status_code} - {response.text}")
             return u"AI가 분석 중인 고성능 상품입니다."
 
-        analysis = response.json()
+        result = response.json()
 
-        # 분석된 캡션 정보 추출
-        if 'description' in analysis and analysis['description']['captions']:
-            caption = analysis['description']['captions'][0]['text']
-            return u"AI 이미지 분석 결과: {}".format(caption)
+        # 1순위: 한글 캡션 시도
+        if 'description' in result and result['description']['captions']:
+            return u"AI 분석: " + result['description']['captions'][0]['text']
 
-        return u"AI가 사물을 인식하고 있습니다."
+        # 2순위: 캡션이 없으면 태그 정보 활용
+        if 'tags' in result and len(result['tags']) > 0:
+            tag_name = result['tags'][0]['name']
+            return u"AI 태그 분석: " + tag_name
 
-    except Exception as e:
-        print(f"Python AI Logic Error: {e}")
-        return u"많은 고객님이 선택하신 베스트셀러 상품입니다."
+        return u"AI가 사물을 인식했습니다."
+    except:
+        return u"추천 베스트셀러 상품입니다."
 
 
 @app.route('/')
@@ -102,28 +90,20 @@ def add_product():
 
         image_url = ""
         if image_file:
-            # 1. Blob Storage에 이미지 업로드
             filename = str(uuid.uuid4()) + "_" + image_file.filename
             blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=filename)
             blob_client.upload_blob(image_file)
             image_url = blob_client.url
 
-        # 2. 업로드된 이미지 URL을 사용하여 AI 분석 수행
+        # AI 결과 생성
         ai_msg = generate_ai_description(image_url)
         final_description = u"{} {}".format(ai_msg, user_desc).strip()
 
-        # 3. DB에 최종 정보 저장
-        new_product = Product(
-            name=name,
-            price=price,
-            category=category,
-            description=final_description,
-            image_url=image_url
-        )
+        new_product = Product(name=name, price=price, category=category, description=final_description,
+                              image_url=image_url)
         db.session.add(new_product)
         db.session.commit()
         return redirect(url_for('home'))
-
     return render_template('add_product.html')
 
 
