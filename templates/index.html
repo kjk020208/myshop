@@ -13,7 +13,7 @@
         .shop-title { color: white; font-size: 1.6rem; font-weight: 800; margin: 0; }
         .student-info { color: #e1f0ff; font-size: 0.9rem; margin: 0; opacity: 0.9; }
         
-        /* 검색창 스타일 */
+        /* 검색창 디자인 */
         .search-container { max-width: 500px; margin: -25px auto 30px; position: relative; z-index: 10; }
         .search-input { 
             border-radius: 30px; border: none; padding: 12px 25px; 
@@ -32,6 +32,7 @@
         }
         .price-tag { color: #d13438; font-weight: bold; font-size: 1.2rem; }
         .btn-azure { background-color: var(--azure-blue); color: white; border-radius: 25px; }
+        .footer-link { color: var(--azure-blue); text-decoration: none; font-weight: 500; }
     </style>
 </head>
 <body>
@@ -51,7 +52,7 @@
 
 <div class="container">
     <div class="search-container">
-        <input type="text" id="searchInput" class="form-control search-input" placeholder="찾으시는 물건을 입력하세요...">
+        <input type="text" id="searchInput" class="form-control search-input" placeholder="상품 이름을 검색해보세요...">
     </div>
 
     <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-4" id="productGrid">
@@ -60,12 +61,12 @@
             <div class="card product-card">
                 <img src="{{ product.image_url }}" class="card-img-top product-img" alt="{{ product.name }}">
                 <div class="card-body p-4">
-                    <span class="ai-badge">Azure AI 분석 완료</span>
+                    <span class="ai-badge">Azure AI 분석</span>
                     <h5 class="card-title fw-bold mb-2 product-name">{{ product.name }}</h5>
-                    <p class="card-text text-muted small mb-3" style="min-height: 40px;">{{ product.description }}</p>
+                    <p class="card-text text-muted small mb-3">{{ product.description }}</p>
                     <div class="d-flex justify-content-between align-items-center">
                         <span class="price-tag">₩{{ "{:,.0f}".format(product.price) }}</span>
-                        <button class="btn btn-azure btn-sm px-3">구매</button>
+                        <button class="btn btn-azure btn-sm px-3">구매하기</button>
                     </div>
                 </div>
             </div>
@@ -75,6 +76,7 @@
 </div>
 
 <footer class="text-center py-5 mt-5 text-muted border-top">
+    <p class="small mb-1">Service URL: <a href="http://cloudshop.koreacentral.cloudapp.azure.com" class="footer-link">cloudshop.koreacentral.cloudapp.azure.com</a></p>
     <p class="small">© 2025 Cloud Computing Project - 2021305014 김재경</p>
 </footer>
 
