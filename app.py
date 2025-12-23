@@ -46,32 +46,28 @@ def generate_ai_description(image_url):
     if not image_url:
         return u"매력적인 디자인의 신규 상품입니다."
     try:
-        # API 주소 정밀 조립 (Description과 Tags를 모두 요청하여 성공 확률 극대화)
         analyze_url = VISION_ENDPOINT.rstrip('/') + "/vision/v3.2/analyze"
+        # [수정] 묘사(Description)와 태그(Tags)를 모두 요청합니다.
         params = {'visualFeatures': 'Description,Tags', 'language': 'ko'}
         headers = {'Ocp-Apim-Subscription-Key': VISION_KEY, 'Content-Type': 'application/json'}
         data = {'url': image_url}
 
         response = requests.post(analyze_url, headers=headers, params=params, json=data, timeout=15)
+        result = response.json()
 
-        # API 호출 자체가 성공(200)한 경우에만 데이터를 파싱합니다.
-        if response.status_code == 200:
-            result = response.json()
+        # 1순위: 문장형 설명이 있는 경우
+        if 'description' in result and result['description']['captions']:
+            return u"AI 분석 결과: " + result['description']['captions'][0]['text']
 
-            # 1순위: 한글/영문 캡션(문장형 설명) 추출
-            if 'description' in result and result['description']['captions']:
-                ai_text = result['description']['captions'][0]['text']
-                return u"AI 이미지 분석: " + ai_text
+        # 2순위: 문장이 없으면 태그들을 합쳐서 설명을 만듭니다.
+        if 'tags' in result and len(result['tags']) > 0:
+            # 상위 3개 단어만 추출해 조합
+            top_tags = [tag['name'] for tag in result['tags'][:3]]
+            return u"AI 인식 키워드: " + ", ".join(top_tags)
 
-            # 2순위: 문장이 없으면 핵심 태그(단어형 설명) 추출
-            if 'tags' in result and len(result['tags']) > 0:
-                tag_name = result['tags'][0]['name']
-                return u"AI 사물 인식: " + tag_name
-
-        return u"AI가 사물을 인식했습니다."
-    except Exception as e:
-        print(f"AI 호출 오류 상세: {e}")
-        return u"추천 베스트셀러 상품입니다."
+        return u"AI가 이미지를 분석 중입니다."
+    except:
+        return u"추천 베스트셀러 아이템입니다."
 
 
 @app.route('/')
