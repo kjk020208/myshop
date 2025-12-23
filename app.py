@@ -5,10 +5,20 @@ from azure.storage.blob import BlobServiceClient
 import uuid
 import random
 
+# [추가] Azure Application Insights 모니터링 라이브러리
+from azure.monitor.opentelemetry import configure_azure_monitor
+
 app = Flask(__name__)
 
-# 1. Azure SQL Database 설정 (Charset=utf8 옵션 유지)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mssql+pyodbc://kjk020208:Gmail0com02*@myshop-sql-server.database.windows.net/myshop-database?driver=ODBC+Driver+17+for+SQL+Server&Charset=utf8'
+# [추가] Application Insights 설정 (주신 연결 문자열 적용)
+# 이 코드가 실행되어야 Azure Portal의 '라이브 메트릭'과 '애플리케이션 맵'에 데이터가 쌓입니다.
+configure_azure_monitor(
+    connection_string="InstrumentationKey=ea5dbbca-e80c-4fc2-963d-828364c43586;IngestionEndpoint=https://koreacentral-0.in.applicationinsights.azure.com/;LiveEndpoint=https://koreacentral.livediagnostics.monitor.azure.com/;ApplicationId=e701c570-f5e0-4011-a427-ba6602564e1a"
+)
+
+# 1. Azure SQL Database 설정
+app.config[
+    'SQLALCHEMY_DATABASE_URI'] = 'mssql+pyodbc://kjk020208:Gmail0com02*@myshop-sql-server.database.windows.net/myshop-database?driver=ODBC+Driver+17+for+SQL+Server&Charset=utf8'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
@@ -17,14 +27,16 @@ AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=my
 CONTAINER_NAME = "product"
 blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
 
-# [핵심 수정] 한글 지원을 위해 String 대신 Unicode 타입을 사용합니다.
+
+# 한글 지원을 위해 Unicode 타입을 사용하는 기존 모델 유지
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.Unicode(200), nullable=False)        # 한글 지원 nvarchar 타입
+    name = db.Column(db.Unicode(200), nullable=False)
     price = db.Column(db.Numeric(18, 2), nullable=False)
-    description = db.Column(db.UnicodeText, nullable=True)   # 한글 지원 nvarchar(max) 타입
-    category = db.Column(db.Unicode(50), nullable=True)      # 한글 지원 nvarchar 타입
+    description = db.Column(db.UnicodeText, nullable=True)
+    category = db.Column(db.Unicode(50), nullable=True)
     image_url = db.Column(db.String(500), nullable=True)
+
 
 def generate_ai_description(product_name):
     messages = [
@@ -36,10 +48,12 @@ def generate_ai_description(product_name):
     ]
     return random.choice(messages)
 
+
 @app.route('/')
 def home():
     products = Product.query.all()
     return render_template('index.html', products=products)
+
 
 @app.route('/add', methods=['GET', 'POST'])
 def add_product():
@@ -61,17 +75,18 @@ def add_product():
             image_url = blob_client.url
 
         new_product = Product(
-            name=name, 
-            price=price, 
-            category=category, 
+            name=name,
+            price=price,
+            category=category,
             description=final_description,
             image_url=image_url
         )
         db.session.add(new_product)
         db.session.commit()
         return redirect(url_for('home'))
-    
+
     return render_template('add_product.html')
+
 
 if __name__ == '__main__':
     with app.app_context():
