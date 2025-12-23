@@ -32,8 +32,8 @@ jobs:
       uses: azure/aks-set-context@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
-        resource-group: myshop-resource-group
-        cluster-name: myshop-aks-cluster
+        resource-group: myshop
+        cluster-name: myshop-cluster
 
     - name: Deploy to AKS
       run: |
