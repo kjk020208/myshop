@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>상품 등록 - Azure Shop</title>
+</head>
+<body>
+    <h1>새로운 상품 등록</h1>
+    <form action="/add" method="POST" enctype="multipart/form-data">
+        <p>상품명: <input type="text" name="name" required></p>
+        <p>가격: <input type="number" name="price" required></p>
+        <p>카테고리: <input type="text" name="category"></p>
+        <p>설명: <textarea name="description"></textarea></p>
+        <p>상품 이미지: <input type="file" name="image" accept="image/*" required></p>
+        <button type="submit">Azure Blob Storage에 저장</button>
+    </form>
+    <hr>
+    <a href="/">홈으로 돌아가기</a>
+</body>
+</html>

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: myshop-service
+spec:
+  selector:
+    app: myshop
+  ports:
+    - port: 80
+      targetPort: 5000
+  type: LoadBalancer

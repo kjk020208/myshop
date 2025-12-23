@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ category }} 카테고리</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header class="header-wrapper">
+        <div class="header-top">
+            <div class="header-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="쇼핑몰 로고">
+            </div>
+            <div class="header-search">
+                <form class="header-search-form">
+                    <input class="header-search-input" type="text" placeholder="검색…">
+                    <button class="header-search-button" type="button">검색</button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <h1 class="section-title">{{ category }} 카테고리</h1>
+
+        <p style="font-size:14px;color:#4b5563;">
+            현재 '{{ category }}' 카테고리에 대한 페이지입니다.<br>
+            추후 AKS + AI 기능 연동 예정.
+        </p>
+    </main>
+
+    <div class="footer">
+        © 2025 Cloud Computing Project Demo
+    </div>
+</body>
+</html>

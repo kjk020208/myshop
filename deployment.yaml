@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myshop-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myshop
+  template:
+    metadata:
+      labels:
+        app: myshop
+    spec:
+      containers:
+      - name: myshop
+        # 1. 새로 만든 ACR 주소(myshopreg)와 태그(v1)로 변경
+        image: myshopreg.azurecr.io/myshop:v1  
+        ports:
+        # 2. Flask 앱 포트인 5000으로 변경
+        - containerPort: 5000

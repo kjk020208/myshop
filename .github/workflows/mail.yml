@@ -1,0 +1,40 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ] # 코드가 main 브랜치에 push될 때 실행
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Login to ACR
+      uses: azure/docker-login@v1
+      with:
+        login-server: myshopreg.azurecr.io
+        username: ${{ secrets.REGISTRY_USERNAME }}
+        password: ${{ secrets.REGISTRY_PASSWORD }}
+
+    - name: Build and Push Docker Image
+      run: |
+        docker build -t myshopreg.azurecr.io/myshop:${{ github.sha }} .
+        docker push myshopreg.azurecr.io/myshop:${{ github.sha }}
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Set AKS Context
+      uses: azure/aks-set-context@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        resource-group: myshop-resource-group
+        cluster-name: myshop-aks-cluster
+
+    - name: Deploy to AKS
+      run: |
+        kubectl set image deployment/myshop-deployment myshop=myshopreg.azurecr.io/myshop:${{ github.sha }}
