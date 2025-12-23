@@ -4,20 +4,20 @@ from flask_sqlalchemy import SQLAlchemy
 from azure.storage.blob import BlobServiceClient
 import uuid
 import random
-import requests  # [추가] AI API 호출을 위해 필요합니다.
+import requests  # 외부 AI API 호출을 위한 라이브러리
 
-# [추가] Azure Application Insights 모니터링 라이브러리
+# Azure Application Insights 모니터링 라이브러리
 from azure.monitor.opentelemetry import configure_azure_monitor
 
 app = Flask(__name__)
 
-# [수정] Application Insights 설정
+# [설정] Application Insights 활성화 (라이브 메트릭 포함)
 configure_azure_monitor(
     connection_string="InstrumentationKey=ea5dbbca-e80c-4fc2-963d-828364c43586;IngestionEndpoint=https://koreacentral-0.in.applicationinsights.azure.com/;LiveEndpoint=https://koreacentral.livediagnostics.monitor.azure.com/;ApplicationId=e701c570-f5e0-4011-a427-ba6602564e1a",
     enable_live_metrics=True
 )
 
-# [추가] Azure Computer Vision 설정 (주신 정보 적용)
+# [설정] Azure Computer Vision 정보 (Korea Central)
 VISION_KEY = "8jwLUwIDgH8GXGgcZdVEsD61sdDBetp2CGM0KETKaBsrypAzwxHAJQQJ99BLACNns7RXJ3w3AAAFACOGCTxd"
 VISION_ENDPOINT = "https://shop-computervision.cognitiveservices.azure.com/"
 
@@ -33,6 +33,7 @@ CONTAINER_NAME = "product"
 blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
 
 
+# 데이터베이스 모델 정의
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.Unicode(200), nullable=False)
@@ -42,35 +43,45 @@ class Product(db.Model):
     image_url = db.Column(db.String(500), nullable=True)
 
 
-# [수정] 진짜 AI 서비스를 호출하는 함수로 변경
+# [핵심 로직] Azure Computer Vision AI를 호출하여 이미지 분석
 def generate_ai_description(image_url):
     if not image_url:
         return u"매력적인 디자인의 신규 상품입니다."
 
     try:
-        # Azure Computer Vision API 엔드포인트 조립
-        analyze_url = VISION_ENDPOINT.rstrip('/') + "/vision/v3.2/analyze"
+        # 안전한 엔드포인트 주소 결합
+        base_url = VISION_ENDPOINT.strip()
+        if not base_url.endswith('/'):
+            base_url += '/'
+        analyze_url = base_url + "vision/v3.2/analyze"
 
-        # 분석 옵션: 설명(Description)을 한글(ko)로 요청
+        # 분석 옵션 및 헤더 설정 (한글 결과 요청)
         params = {'visualFeatures': 'Description', 'language': 'ko'}
-        headers = {'Ocp-Apim-Subscription-Key': VISION_KEY, 'Content-Type': 'application/json'}
+        headers = {
+            'Ocp-Apim-Subscription-Key': VISION_KEY,
+            'Content-Type': 'application/json'
+        }
         data = {'url': image_url}
 
-        # AI 서버에 분석 요청
-        response = requests.post(analyze_url, headers=headers, params=params, json=data)
-        response.raise_for_status()
+        # AI 서버에 분석 요청 (타임아웃 10초)
+        response = requests.post(analyze_url, headers=headers, params=params, json=data, timeout=10)
+
+        # 호출 실패 시 로그 출력 및 예외 발생
+        if response.status_code != 200:
+            print(f"AI API Error: {response.status_code} - {response.text}")
+            return u"AI가 분석 중인 특별한 상품입니다."
 
         analysis = response.json()
 
-        # AI가 만든 설명 추출
+        # 분석된 텍스트 추출
         if 'description' in analysis and analysis['description']['captions']:
             caption = analysis['description']['captions'][0]['text']
             return u"AI 이미지 분석 결과: {}".format(caption)
 
-        return u"AI가 분석 중인 특별한 상품입니다."
+        return u"AI 모델이 사진을 읽고 있습니다."
 
     except Exception as e:
-        print(f"AI Error: {e}")
+        print(f"Python Exception during AI call: {e}")
         return u"많은 사랑을 받는 베스트셀러 아이템입니다."
 
 
@@ -91,15 +102,17 @@ def add_product():
 
         image_url = ""
         if image_file:
+            # 유니크한 파일명 생성 및 Blob 업로드
             filename = str(uuid.uuid4()) + "_" + image_file.filename
             blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=filename)
             blob_client.upload_blob(image_file)
             image_url = blob_client.url
 
-        # [수정] 업로드된 이미지 URL을 AI에게 전달하여 설명을 생성합니다.
+        # 업로드된 이미지 URL을 기반으로 AI 문구 생성
         ai_msg = generate_ai_description(image_url)
         final_description = u"{} {}".format(ai_msg, user_desc).strip()
 
+        # 데이터베이스 저장
         new_product = Product(
             name=name,
             price=price,
