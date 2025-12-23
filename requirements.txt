@@ -7,3 +7,4 @@ pyodbc==4.0.32
 azure-storage-blob
 openai
 azure-monitor-opentelemetry
+requests
