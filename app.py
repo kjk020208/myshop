@@ -4,6 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from azure.storage.blob import BlobServiceClient
 import uuid
 import random
+import requests  # [추가] AI API 호출을 위해 필요합니다.
 
 # [추가] Azure Application Insights 모니터링 라이브러리
 from azure.monitor.opentelemetry import configure_azure_monitor
@@ -11,11 +12,14 @@ from azure.monitor.opentelemetry import configure_azure_monitor
 app = Flask(__name__)
 
 # [수정] Application Insights 설정
-# enable_live_metrics=True 옵션을 추가하여 실시간 대시보드를 활성화합니다.
 configure_azure_monitor(
     connection_string="InstrumentationKey=ea5dbbca-e80c-4fc2-963d-828364c43586;IngestionEndpoint=https://koreacentral-0.in.applicationinsights.azure.com/;LiveEndpoint=https://koreacentral.livediagnostics.monitor.azure.com/;ApplicationId=e701c570-f5e0-4011-a427-ba6602564e1a",
-    enable_live_metrics=True  # 이 한 줄이 추가되어야 실시간 그래프가 작동합니다!
+    enable_live_metrics=True
 )
+
+# [추가] Azure Computer Vision 설정 (주신 정보 적용)
+VISION_KEY = "8jwLUwIDgH8GXGgcZdVEsD61sdDBetp2CGM0KETKaBsrypAzwxHAJQQJ99BLACNns7RXJ3w3AAAFACOGCTxd"
+VISION_ENDPOINT = "https://shop-computervision.cognitiveservices.azure.com/"
 
 # 1. Azure SQL Database 설정
 app.config[
@@ -28,7 +32,7 @@ AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=my
 CONTAINER_NAME = "product"
 blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
 
-# 한글 지원을 위해 Unicode 타입을 사용하는 기존 모델 유지
+
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.Unicode(200), nullable=False)
@@ -37,20 +41,44 @@ class Product(db.Model):
     category = db.Column(db.Unicode(50), nullable=True)
     image_url = db.Column(db.String(500), nullable=True)
 
-def generate_ai_description(product_name):
-    messages = [
-        u"드디어 입고된 {}! 세련된 디자인으로 당신의 일상을 바꿔보세요.".format(product_name),
-        u"선물용으로 인기 만점인 {}, 지금 바로 특별한 가격에 만나보세요.".format(product_name),
-        u"누적 판매량 1위! {}은 품질부터 다릅니다. 놓치지 마세요.".format(product_name),
-        u"감각적인 당신을 위한 {}. 오늘 주문하면 바로 배송됩니다.".format(product_name),
-        u"품절 임박 상품인 {}, 오직 여기서만 구매 가능합니다!".format(product_name)
-    ]
-    return random.choice(messages)
+
+# [수정] 진짜 AI 서비스를 호출하는 함수로 변경
+def generate_ai_description(image_url):
+    if not image_url:
+        return u"매력적인 디자인의 신규 상품입니다."
+
+    try:
+        # Azure Computer Vision API 엔드포인트 조립
+        analyze_url = VISION_ENDPOINT.rstrip('/') + "/vision/v3.2/analyze"
+
+        # 분석 옵션: 설명(Description)을 한글(ko)로 요청
+        params = {'visualFeatures': 'Description', 'language': 'ko'}
+        headers = {'Ocp-Apim-Subscription-Key': VISION_KEY, 'Content-Type': 'application/json'}
+        data = {'url': image_url}
+
+        # AI 서버에 분석 요청
+        response = requests.post(analyze_url, headers=headers, params=params, json=data)
+        response.raise_for_status()
+
+        analysis = response.json()
+
+        # AI가 만든 설명 추출
+        if 'description' in analysis and analysis['description']['captions']:
+            caption = analysis['description']['captions'][0]['text']
+            return u"AI 이미지 분석 결과: {}".format(caption)
+
+        return u"AI가 분석 중인 특별한 상품입니다."
+
+    except Exception as e:
+        print(f"AI Error: {e}")
+        return u"많은 사랑을 받는 베스트셀러 아이템입니다."
+
 
 @app.route('/')
 def home():
     products = Product.query.all()
     return render_template('index.html', products=products)
+
 
 @app.route('/add', methods=['GET', 'POST'])
 def add_product():
@@ -61,15 +89,16 @@ def add_product():
         user_desc = request.form.get('description', '')
         image_file = request.files.get('image')
 
-        ai_msg = generate_ai_description(name)
-        final_description = u"{} {}".format(ai_msg, user_desc).strip()
-
         image_url = ""
         if image_file:
             filename = str(uuid.uuid4()) + "_" + image_file.filename
             blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=filename)
             blob_client.upload_blob(image_file)
             image_url = blob_client.url
+
+        # [수정] 업로드된 이미지 URL을 AI에게 전달하여 설명을 생성합니다.
+        ai_msg = generate_ai_description(image_url)
+        final_description = u"{} {}".format(ai_msg, user_desc).strip()
 
         new_product = Product(
             name=name,
@@ -83,6 +112,7 @@ def add_product():
         return redirect(url_for('home'))
 
     return render_template('add_product.html')
+
 
 if __name__ == '__main__':
     with app.app_context():
