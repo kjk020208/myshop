@@ -10,10 +10,11 @@ from azure.monitor.opentelemetry import configure_azure_monitor
 
 app = Flask(__name__)
 
-# [추가] Application Insights 설정 (주신 연결 문자열 적용)
-# 이 코드가 실행되어야 Azure Portal의 '라이브 메트릭'과 '애플리케이션 맵'에 데이터가 쌓입니다.
+# [수정] Application Insights 설정
+# enable_live_metrics=True 옵션을 추가하여 실시간 대시보드를 활성화합니다.
 configure_azure_monitor(
-    connection_string="InstrumentationKey=ea5dbbca-e80c-4fc2-963d-828364c43586;IngestionEndpoint=https://koreacentral-0.in.applicationinsights.azure.com/;LiveEndpoint=https://koreacentral.livediagnostics.monitor.azure.com/;ApplicationId=e701c570-f5e0-4011-a427-ba6602564e1a"
+    connection_string="InstrumentationKey=ea5dbbca-e80c-4fc2-963d-828364c43586;IngestionEndpoint=https://koreacentral-0.in.applicationinsights.azure.com/;LiveEndpoint=https://koreacentral.livediagnostics.monitor.azure.com/;ApplicationId=e701c570-f5e0-4011-a427-ba6602564e1a",
+    enable_live_metrics=True  # 이 한 줄이 추가되어야 실시간 그래프가 작동합니다!
 )
 
 # 1. Azure SQL Database 설정
@@ -27,7 +28,6 @@ AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=my
 CONTAINER_NAME = "product"
 blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
 
-
 # 한글 지원을 위해 Unicode 타입을 사용하는 기존 모델 유지
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -36,7 +36,6 @@ class Product(db.Model):
     description = db.Column(db.UnicodeText, nullable=True)
     category = db.Column(db.Unicode(50), nullable=True)
     image_url = db.Column(db.String(500), nullable=True)
-
 
 def generate_ai_description(product_name):
     messages = [
@@ -48,12 +47,10 @@ def generate_ai_description(product_name):
     ]
     return random.choice(messages)
 
-
 @app.route('/')
 def home():
     products = Product.query.all()
     return render_template('index.html', products=products)
-
 
 @app.route('/add', methods=['GET', 'POST'])
 def add_product():
@@ -86,7 +83,6 @@ def add_product():
         return redirect(url_for('home'))
 
     return render_template('add_product.html')
-
 
 if __name__ == '__main__':
     with app.app_context():
