@@ -106,8 +106,6 @@ def add_product():
         db.session.commit()
         return redirect(url_for('home'))
     return render_template('add_product.html')
-
-
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
